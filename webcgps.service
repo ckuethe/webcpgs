@@ -1,0 +1,15 @@
+[Unit]
+Description=Web Interface to gpsd
+Documentation=https://github.com/ckuethe/webcgps/
+Documentation=https://gpsd.io/
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+# You will, of course, need to provide a full path to webcgps.py, along with any other flags...
+#ExecStart=/opt/gpsd/bin/webcgps.py -l 0.0.0.0 gpsd://192.168.42.13:2947/dev/ttyWierdGpsDevice -i 10
+ExecStart=/path/to/webcgps.py
+
+[Install]
+WantedBy=multi-user.target
