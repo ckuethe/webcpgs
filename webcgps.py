@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Author: Chris Kuethe <chris.kuethe@gmail.com> , https://github.com/ckuethe/
+# Author: Chris Kuethe <chris.kuethe@gmail.com> , https://github.com/ckuethe/webcgps
 # SPDX-License-Identifier: MIT
 """
 Web version of cgps, so I can point a web browser at some IOT device running
