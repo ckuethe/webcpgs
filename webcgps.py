@@ -99,6 +99,7 @@ def gps_thread():
                     if not line:
                         if now - last_data_time > ARGS.timeout:
                             raise TimeoutError
+                        sleep(0.2)
                         continue
                     if NAV["CON"] is False:
                         logging.info("connected to gpsd")
