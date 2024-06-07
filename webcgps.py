@@ -5,25 +5,28 @@
 Web version of cgps, so I can point a web browser at some IOT device running
 gpsd and see what it's doing. Fear my early 90's web1.0 html table skills.
 """
+import logging
 import re
 import socket
 import threading
 from argparse import ArgumentParser, Namespace
 from json import dumps as jdumps
 from json import loads as jloads
-from time import sleep
-from typing import Any, Dict, Optional
+from time import monotonic, sleep
+from typing import Any, Dict
 
 from flask import Flask, jsonify
 
 NAV: Dict[str, Any] = {
     "TIME": None,
+    "CON": False,
     "TPV": dict(),
     "SKY": dict(),
 }
 ARGS: Namespace = Namespace()
 RUN: bool = True
 app: Flask = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def get_args() -> Namespace:
@@ -79,9 +82,11 @@ def gps_thread():
     global NAV
     global ARGS
     global RUN
+    last_data_time = 0
     while RUN:
         try:
             with socket.create_connection((ARGS.gpsd["host"], ARGS.gpsd["port"]), ARGS.timeout) as s:
+                s.setblocking(False)
                 gpsfd = s.makefile("rw")
                 watch_args = {"enable": True, "json": True}
                 if ARGS.gpsd["dev"]:
@@ -90,7 +95,16 @@ def gps_thread():
                 print(watch, file=gpsfd, flush=True)
                 while RUN:
                     line = gpsfd.readline().strip()
+                    now = monotonic()
+                    if not line:
+                        if now - last_data_time > ARGS.timeout:
+                            raise TimeoutError
+                        continue
+                    if NAV["CON"] is False:
+                        logging.info("connected to gpsd")
+                        NAV["CON"] = True
                     x = jloads(line)
+                    last_data_time = now
                     mt = x["class"]
                     # Only care about these two message types
                     if mt not in ["TPV", "SKY"]:
@@ -100,7 +114,7 @@ def gps_thread():
                         ft = x.get("time", None)
                         if ft != NAV["TIME"]:
                             NAV["TIME"] = ft
-                        x["cep"] = x.pop("eph")
+                        x["cep"] = x.pop("eph", "")
                     if mt == "SKY" and "satellites" in x:
                         # Sort satellites in decreasing order of quality
                         x["satellites"].sort(key=lambda s: s["qual"] * 100 + s["ss"], reverse=True)
@@ -109,8 +123,14 @@ def gps_thread():
         except KeyboardInterrupt:
             RUN = False
             return
-        except TimeoutError:
+        except (InterruptedError, TimeoutError):
             pass
+        except Exception as e:
+            logging.exception(e)
+        finally:
+            if NAV["CON"]:
+                logging.info("disconnected from gpsd")
+            NAV["CON"] = False
         sleep(0.5)
 
 
@@ -162,6 +182,7 @@ def index_html() -> str:
 <tr><td valign="top">
 -->
 <table id="tpv" border="0" cellpadding="2"><h2>Navigation Solution</h2></td>
+<tr><td colspan="3" id="connected"></td></tr>
 <tr><td><b>Time</b></td><td colspan="2"> <output id="time">Time</output> (<output id="leapseconds"></output>)</td></tr>
 <tr><td><b>Latitude</b></td><td colspan=2><output id="lat"></output></td></tr>
 <tr><td><b>Longitude</b></td><td colspan=2><output id="lon"></output></td></tr>
@@ -203,6 +224,14 @@ def index_html() -> str:
     httpRequest.addEventListener("readystatechange", (url) => {
       if (httpRequest.readyState === 4 && httpRequest.status === 200) {
         var gpsInfo = JSON.parse(httpRequest.responseText);
+        if (gpsInfo["CON"]) {
+            cs = "Connected";
+            cc = "green";
+        } else {
+            cs = "Disconnected";
+            cc = "red";
+        }
+        document.getElementById("connected").innerHTML = `<center><strong><font color="${cc}">GPSD ${cs}</font></strong></center>`;
         gt = gpsInfo["TPV"]
         gs = gpsInfo["SKY"]
         f = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode", "climb", "speed", "track", "magvar", "epx", "epy", "epv", "eps", "cep", "sep"]
