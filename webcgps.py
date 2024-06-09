@@ -19,6 +19,7 @@ from flask import Flask, jsonify
 
 NAV: Dict[str, Any] = {
     "TIME": None,
+    "TS": None,
     "CON": False,
     "TPV": dict(),
     "SKY": dict(),
@@ -111,8 +112,10 @@ def gps_thread():
                     if mt not in ["TPV", "SKY"]:
                         continue
                     # Skip old data
+                    ft = x.get("time", None)
+                    if ft:
+                        NAV["TS"] = ft
                     if mt == "TPV":
-                        ft = x.get("time", None)
                         if ft != NAV["TIME"]:
                             NAV["TIME"] = ft
                         x["cep"] = x.pop("eph", "")
@@ -184,7 +187,8 @@ def index_html() -> str:
 -->
 <table id="tpv" border="0" cellpadding="2"><h2>Navigation Solution</h2></td>
 <tr><td colspan="3" id="connected"></td></tr>
-<tr><td><b>Time</b></td><td colspan="2"> <output id="time">Time</output> (<output id="leapseconds"></output>)</td></tr>
+<tr><td><b>Message Time</b></td><td colspan="2"> <output id="ts"></output></td></tr>
+<tr><td><b>Time</b></td><td colspan="2"> <output id="time"></output> (<output id="leapseconds"></output>)</td></tr>
 <tr><td><b>Latitude</b></td><td colspan=2><output id="lat"></output></td></tr>
 <tr><td><b>Longitude</b></td><td colspan=2><output id="lon"></output></td></tr>
 <tr><td><b>Altitude</b></td><td><output id="altHAE"></output>m HAE</td><td><output id="altMSL"></output>m MSL</td></tr>
@@ -232,7 +236,8 @@ def index_html() -> str:
             cs = "Disconnected";
             cc = "red";
         }
-        document.getElementById("connected").innerHTML = `<center><strong><font color="${cc}">GPSD ${cs}</font></strong></center>`;
+        document.getElementById("connected").innerHTML = `<center><strong><font size="+2" color="${cc}">GPSD ${cs}</font></strong></center>`;
+        document.getElementById("ts").innerText = gpsInfo["TS"];
         gt = gpsInfo["TPV"]
         gs = gpsInfo["SKY"]
         f = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode", "climb", "speed", "track", "magvar", "epx", "epy", "epv", "eps", "cep", "sep"]
