@@ -18,4 +18,4 @@ options:
   -v, --verbose                          [0]
 ```
 
-![Web GPS vs curses cgps](webcgps_v_cgps.jpg?raw=true "WebGPS comparison")
+![Web GPS vs curses cgps](webcgps_vs_cgps.jpg?raw=true "WebGPS comparison")
