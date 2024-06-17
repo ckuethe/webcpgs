@@ -262,7 +262,7 @@ def index_html() -> str:
 
         // nasty stuff to compute the table contents
         sky_table = document.getElementById("sky");
-        table_content = "<tr> <td><b>GNSS</b></td> <td><b>PRN</b></td> <td><b>Elev</b></td> <td><b>Azim</b></td> <td><b>SNR</b></td> <td><b>Used</b></td> <td><b>Quality</b></td> </tr>"
+        table_content = "<tr> <td><b>GNSS</b></td> <td><b>PRN</b></td> <td><b>Azim</b></td> <td><b>Elev</b></td> <td><b>SNR</b></td> <td><b>Used</b></td> <td><b>Quality</b></td> </tr>"
         for(i=0; i<gs["satellites"].length; i++){
           s = gs["satellites"][i];
           s['used'] = s['used']?"Y":"N";
