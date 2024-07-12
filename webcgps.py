@@ -121,7 +121,7 @@ def gps_thread():
                         x["cep"] = x.pop("eph", "")
                     if mt == "SKY" and "satellites" in x:
                         # Sort satellites in decreasing order of quality
-                        x["satellites"].sort(key=lambda s: s["qual"] * 100 + s["ss"], reverse=True)
+                        x["satellites"].sort(key=lambda s: s.get("qual",0) * 100 + s.get("ss", 0), reverse=True)
                     x.pop("class", None)
                     NAV[mt].update(x)
         except KeyboardInterrupt:
