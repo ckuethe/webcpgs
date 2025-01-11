@@ -4,6 +4,7 @@
 Here's a hacky little python script to roughly approximate the output of `cgps`, but in a web page.
 
 NB: in the same way that `gpsd` only listens to localhost by default, this server also only listens on localhost by default.
+NB: If you're planning on using this with a ublox-based receiver aboard an aircraft I suggest you configure the dynamics mode to "Aircraft <1g" or else the receiver will constantly reset.
 
 ```
 usage: webcgps.py [-h] [-g GPSD] [-i SEC] [-l LISTEN] [-p PORT] [-t SEC] [-v]
