@@ -121,7 +121,7 @@ def gps_thread():
                         x["cep"] = x.pop("eph", "")
                     if mt == "SKY" and "satellites" in x:
                         # Sort satellites in decreasing order of quality
-                        x["satellites"].sort(key=lambda s: s.get("qual",0) * 100 + s.get("ss", 0), reverse=True)
+                        x["satellites"].sort(key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True)
                     x.pop("class", None)
                     NAV[mt].update(x)
         except KeyboardInterrupt:
@@ -180,7 +180,7 @@ def index_html() -> str:
 <html>
 <body>
 <tt>
-<!-- 
+<!--
 <table id="main" border="0">
 <tr> <td align="center"><b>Navigation Solution</b></td> <td align="center"><b>Skyview</b></td> </tr>
 <tr><td valign="top">
