@@ -130,7 +130,7 @@ def gps_thread():
         except (InterruptedError, TimeoutError):
             pass
         except Exception as e:
-            logging.exception(e)
+            logging.info(e)
         finally:
             if NAV["CON"]:
                 logging.info("disconnected from gpsd")
