@@ -3,6 +3,17 @@ Description=Web Interface to gpsd
 Documentation=https://github.com/ckuethe/webcgps/
 Documentation=https://gpsd.io/
 
+# You may be tempted to put something like this
+#
+#	After=gpsd.service
+#	Requires=gpsd.service
+#
+# but don't do that. There is nothing wrong with letting
+# this script start whenever it does, without depending on
+# gpsd. In fact, it's useful to decouple it from gpsd so
+# that you always have a nice webpage that tells you if
+# gpsd is running or not.
+
 [Service]
 Type=simple
 User=www-data
@@ -10,6 +21,12 @@ Group=www-data
 # You will, of course, need to provide a full path to webcgps.py, along with any other flags...
 #ExecStart=/opt/gpsd/bin/webcgps.py -l 0.0.0.0 gpsd://192.168.42.13:2947/dev/ttyWierdGpsDevice -i 10
 ExecStart=/path/to/webcgps.py
+
+# Insist on restarting, but don't be rude about it
+Restart=always
+RestartSec=2
+StartLimitBurst=3
+StartLimitInterval=20
 
 [Install]
 WantedBy=multi-user.target
