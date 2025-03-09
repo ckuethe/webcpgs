@@ -120,6 +120,7 @@ def gps_thread():
                         if ft != NAV["TIME"]:
                             NAV["TIME"] = ft
                         x["cep"] = x.pop("eph", "")
+                        x["climb_fpm"] = round(x["climb"] * 196.85, 1)
                     if mt == "SKY" and "satellites" in x:
                         # Sort satellites in decreasing order of quality
                         x["satellites"].sort(key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True)
@@ -131,7 +132,7 @@ def gps_thread():
         except (InterruptedError, TimeoutError):
             pass
         except Exception as e:
-            logging.info(e)
+            logging.info(f"Caught exception '{e}'")
         finally:
             if NAV["CON"]:
                 logging.info("disconnected from gpsd")
@@ -196,7 +197,7 @@ def index_html() -> str:
 <tr><td><b>Altitude</b></td><td><output id="altHAE"></output>m HAE</td><td><output id="altMSL"></output>m MSL</td></tr>
 <tr><td><b>Speed</b></td><td colspan=2><output id="speed"></output>m/s</td></tr>
 <tr><td><b>Track</b></td> <td><output id="track"></output></td>  <td><output id="magvar"></output></td> </tr>
-<tr><td><b>Climb</b></td><td colspan=2><output id="climb"></output>m/s</td></tr>
+<tr><td><b>Climb</b></td><td><output id="climb"></output>m/s</td><td><output id="climb_fpm"></output>ft/min</td></tr>
 <tr><td><b>Fix Mode</b></td><td colspan=2><output id="mode"></output></td></tr>
 <tr><td><b>Satellites Used / Seen</b></td> <td colspan="2"><output id="uSat"></output> / <output id="nSat"></output></td> </tr>
 <tr><td><b>Lon  Err</b> (XDOP, EPX)</td><td><output id="xdop"></output></td> <td><output id="epx"></output>m</td></tr>
@@ -242,7 +243,7 @@ def index_html() -> str:
         document.getElementById("ts").innerText = gpsInfo["TS"];
         gt = gpsInfo["TPV"]
         gs = gpsInfo["SKY"]
-        f = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode", "climb", "speed", "track", "magvar", "epx", "epy", "epv", "eps", "cep", "sep"]
+        f = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode", "climb", "climb_fpm", "speed", "track", "magvar", "epx", "epy", "epv", "eps", "cep", "sep"]
         for(i=0; i<f.length; i++){
           n = f[i]
           document.getElementById(n).innerText= gt[n];
