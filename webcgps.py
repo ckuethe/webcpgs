@@ -65,6 +65,7 @@ def get_args() -> Namespace:
         "-t",
         "--timeout",
         default=3,
+        type=float,
         metavar="SEC",
         help="GPSD socket timeout in seconds [%(default)s]",
     )
