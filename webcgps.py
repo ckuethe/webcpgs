@@ -27,7 +27,7 @@ NAV: Dict[str, Any] = {
 ARGS: Namespace = Namespace()
 RUN: bool = True
 app: Flask = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 
 def get_args() -> Namespace:
@@ -168,6 +168,7 @@ def main():
     g.daemon = True
     g.start()
     try:
+        app.logger.setLevel(logging.INFO if ARGS.verbose else logging.ERROR)
         app.run(debug=ARGS.verbose, port=ARGS.port, host=ARGS.listen)
     except KeyboardInterrupt:
         global RUN
