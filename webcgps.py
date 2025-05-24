@@ -6,12 +6,13 @@ Web version of cgps, so I can point a web browser at some IOT device running
 gpsd and see what it's doing. Fear my early 90's web1.0 html table skills.
 """
 import logging
+import os
 import re
 import socket
-import threading
 from argparse import ArgumentParser, Namespace
 from json import dumps as jdumps
 from json import loads as jloads
+from threading import Thread
 from time import monotonic, sleep
 from typing import Any, Dict
 
@@ -25,14 +26,14 @@ NAV: Dict[str, Any] = {
     "SKY": dict(),
 }
 ARGS: Namespace = Namespace()
-RUN: bool = True
+APP_RUN: bool = True
 app: Flask = Flask(__name__)
 logging.basicConfig(level=logging.WARNING)
 
 
 def get_args() -> Namespace:
     global ARGS
-    ap = ArgumentParser()
+    ap: ArgumentParser = ArgumentParser()
     ap.add_argument(
         "-g",
         "--gpsd",
@@ -80,79 +81,118 @@ def get_args() -> Namespace:
     return ARGS
 
 
-def gps_thread():
+def gps_thread() -> None:
     global NAV
     global ARGS
-    global RUN
-    last_data_time = 0
-    while RUN:
+    global APP_RUN
+    connected = False
+    while APP_RUN:
         try:
-            with socket.create_connection((ARGS.gpsd["host"], ARGS.gpsd["port"]), ARGS.timeout) as s:
-                s.setblocking(False)
-                gpsfd = s.makefile("rw")
-                watch_args = {"enable": True, "json": True}
+            with socket.create_connection((ARGS.gpsd["host"], ARGS.gpsd["port"]), ARGS.timeout) as gpssock:
+                gpssock.setblocking(False)
+                gpsfd = gpssock.makefile("rw")
+                watch_args: dict[str, bool] = {"enable": True, "json": True}
                 if ARGS.gpsd["dev"]:
-                    watch_args["device"] = ARGS.gpsd["dev"]
-                watch = "?WATCH=" + jdumps(watch_args)
+                    NAV["DEV"] = watch_args["device"] = ARGS.gpsd["dev"]
+                else:
+                    NAV["DEV"] = "any"
+                watch: str = "?WATCH=" + jdumps(watch_args)
                 print(watch, file=gpsfd, flush=True)
-                while RUN:
-                    line = gpsfd.readline().strip()
-                    now = monotonic()
+                connected = True
+                last_data_time = 0.0
+                while connected:
+                    line: str = gpsfd.readline().strip()
+                    if "No such device" in line:
+                        NAV["CON"] = False
+                        NAV["DEV"] = "No GPS Device"
+
+                    monotime: float = monotonic()
                     if not line:
-                        if now - last_data_time > ARGS.timeout:
-                            raise TimeoutError
+                        if last_data_time and (monotime - last_data_time > ARGS.timeout):
+                            connected = False
+                            raise TimeoutError("No data")
                         sleep(0.2)
                         continue
                     if NAV["CON"] is False:
                         logging.info("connected to gpsd")
                         NAV["CON"] = True
-                    x = jloads(line)
-                    last_data_time = now
-                    mt = x["class"]
+                    message: dict[str, Any] = jloads(line)
+                    last_data_time = monotime
+                    message_type: str = message["class"]
+
                     # Only care about these two message types
-                    if mt not in ["TPV", "SKY"]:
+                    if message_type not in ["TPV", "SKY"]:
                         continue
+
                     # Skip old data
-                    ft = x.get("time", None)
-                    if ft:
-                        NAV["TS"] = ft
-                    if mt == "TPV":
-                        if ft != NAV["TIME"]:
-                            NAV["TIME"] = ft
-                        x["cep"] = x.pop("eph", "")
-                        x["climb_fpm"] = round(x["climb"] * 196.85, 1)
-                    if mt == "SKY" and "satellites" in x:
-                        # Sort satellites in decreasing order of quality
-                        x["satellites"].sort(key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True)
-                    x.pop("class", None)
-                    NAV[mt].update(x)
+                    fix_timestamp: Any = message.get("time", "")
+                    if fix_timestamp:
+                        NAV["TS"] = fix_timestamp
+                    if message_type == "TPV":
+                        if fix_timestamp != NAV["TIME"]:
+                            NAV["TIME"] = fix_timestamp
+                        try:
+                            # this won't exist if there is no valid fix
+                            message["cep"] = message.pop("eph")
+                            message["climb_fpm"] = round(message["climb"] * 196.85, 1)
+                        except KeyError:
+                            pass
+                    if message_type == "SKY":
+                        if "satellites" in message:
+                            # Sort satellites in decreasing order of quality
+                            message["satellites"].sort(
+                                key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True
+                            )
+                        else:
+                            continue
+                    message.pop("class", None)
+                    NAV[message_type].update(message)
         except KeyboardInterrupt:
-            RUN = False
+            APP_RUN = False
             return
-        except (InterruptedError, TimeoutError):
+        except Exception:
+            """
+            not terribly concerned about anything else going wrong, just
+            hide it and retry the connection. Stuff that might go wrong:
+            - network errors
+            - gpsd loses connection to the device
+            - device reboots and emits garbage
+            """
             pass
-        except Exception as e:
-            logging.info(f"Caught exception '{e}'")
         finally:
             if NAV["CON"]:
-                logging.info("disconnected from gpsd")
+                print(f"disconnected from gpsd - {NAV['DEV']}")
             NAV["CON"] = False
+            connected = False
+            try:
+                gpsfd.close()
+                gpssock.close()
+            except Exception:
+                pass  # we tried.
+
         sleep(0.5)
 
 
 @app.route("/", methods=["GET"])
-def do_index():
+def do_index() -> str:
+    if APP_RUN is False:
+        raise SystemExit
     return index_html()
+
+
+@app.route("/gpsreset", methods=["GET"])
+def do_gps_reset():
+    return jsonify({"error": "gps reset not yet implemented"})
 
 
 @app.route("/data", methods=["GET"])
 def do_data():
-    if RUN is False:
+    if APP_RUN is False:
         raise SystemExit
     return jsonify(NAV)
 
 
-def main():
+def main() -> None:
     global ARGS
     get_args()
     m = re.match(
@@ -161,19 +201,19 @@ def main():
     if m is None:
         raise ValueError("couldn't parse gpsd url")
     else:
-        d = m.groupdict()
+        d: dict[str, str | int | None] = m.groupdict()
         d["port"] = 2947 if d["port"] is None else d["port"]
-        ARGS.gpsd = d
+        ARGS.gpsd = d  # pyrefly: ignore  (it doesn't know that args.gpsd does exist)
     global NAV
-    g = threading.Thread(target=gps_thread)
+    g: Thread = Thread(target=gps_thread)
     g.daemon = True
     g.start()
     try:
         app.logger.setLevel(logging.INFO if ARGS.verbose else logging.ERROR)
         app.run(debug=ARGS.verbose, port=ARGS.port, host=ARGS.listen)
     except KeyboardInterrupt:
-        global RUN
-        RUN = False
+        global APP_RUN
+        APP_RUN = False
         g.join(2)
 
 
@@ -206,8 +246,8 @@ def index_html() -> str:
 <tr><td><b>2D   Err</b> (HDOP, CEP)</td><td><output id="hdop"></output></td> <td><output id="cep"></output>m</td></tr>
 <tr><td><b>3D   Err</b> (PDOP, SEP)</td><td><output id="pdop"></output></td> <td><output id="sep"></output>m</td></tr>
 <tr><td><b>Speed Err</b> (EPS)</td><td colspan="2"><output id="eps"></output>m/s</td> </tr>
-<tr><td><b>Time Err</b> (TDOP)</td><td colspan="2"><output id="tdop"></output></td> </td></tr>
-<tr><td><b>Geo  Err</b> (GDOP)</td><td colspan="2"><output id="gdop"></output></td> </tr>
+<tr><td><b>Time Err</b> (TDOP)</td><td colspan="2"><output id="tdop"></output>s</td> </td></tr>
+<tr><td><b>Geo  Err</b> (GDOP)</td><td colspan="2"><output id="gdop"></output>m</td> </tr>
 <tr><td><b>ECEF X, VX</b></td><td><output id=ecefx></output>m</td>  <td><output id=ecefvx></output>m/s</td> </tr>
 <tr><td><b>ECEF Y, VY</b></td><td><output id=ecefy></output>m</td>  <td><output id=ecefvy></output>m/s</td> </tr>
 <tr><td><b>ECEF Z, VZ</b></td><td><output id=ecefz></output>m</td>  <td><output id=ecefvz></output>m/s</td> </tr>
@@ -232,42 +272,64 @@ def index_html() -> str:
     httpRequest.addEventListener("readystatechange", (url) => {
       if (httpRequest.readyState === 4 && httpRequest.status === 200) {
         var gpsInfo = JSON.parse(httpRequest.responseText);
+        console.log(gpsInfo);
         if (gpsInfo["CON"]) {
             cs = "Connected";
             cc = "green";
+            emoji = "🛰️";
         } else {
             cs = "Disconnected";
             cc = "red";
+            emoji = "⛔"; // ⚠️
         }
-        document.getElementById("connected").innerHTML = `<center><strong><font size="+2" color="${cc}">GPSD ${cs}</font></strong></center>`;
+        document.getElementById("connected").innerHTML = `<center><strong><font size="+2"><font color="${cc}">GPSD ${cs}</font> ${emoji}</font></strong></center>`;
         document.getElementById("ts").innerText = gpsInfo["TS"];
-        gt = gpsInfo["TPV"]
-        gs = gpsInfo["SKY"]
-        f = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode", "climb", "climb_fpm", "speed", "track", "magvar", "epx", "epy", "epv", "eps", "cep", "sep"]
-        for(i=0; i<f.length; i++){
-          n = f[i]
-          document.getElementById(n).innerText= gt[n];
+        gps_tpv = gpsInfo["TPV"]
+        gps_sky = gpsInfo["SKY"]
+
+        // I made the HTML element names match the JSON element names so I could
+        // do a loop just like this.
+        fields = ["time", "leapseconds", "lat", "lon", "altHAE", "altMSL", "mode",
+                  "climb", "climb_fpm", "speed", "track", "magvar", "epx", "epy",
+                  "epv", "eps", "cep", "sep"]
+        for(i=0; i<fields.length; i++){
+          fieldname = fields[i]
+          if (gps_tpv[fieldname] === undefined){
+            document.getElementById(fieldname).innerText = " --- ";
+          } else {
+            document.getElementById(fieldname).innerText = gps_tpv[fieldname];
+          }
         }
-        f = ["x", "y", "z"];
-        for(i=0; i<f.length; i++) {
-          d = "ecef"+f[i]
-          document.getElementById(d).innerText = gt[d];
-          d = "ecefv"+f[i]
-          document.getElementById(d).innerText = gt[d];
+        // ECEF state vector
+        axis = ["x", "y", "z"];
+        vz = ["", "v"];
+        for(i=0; i<axis.length; i++) {
+          for(j=0; j<vz.length; j++) {
+            fieldname = "ecef"+vz[j]+axis[i]
+            if (gps_tpv[fieldname] === undefined) {
+                document.getElementById(fieldname).innerText = " --- ";
+            } else {
+                document.getElementById(fieldname).innerText = gps_tpv[fieldname];
+            }
+          }
         }
 
         // useful quantities to be copied from the SKY message
-        f = ["xdop", "ydop", "hdop", "vdop", "pdop", "tdop", "gdop", "nSat", "uSat"];
-        for(i=0; i<f.length; i++) {
-          n = f[i]
-          document.getElementById(n).innerText = gpsInfo["SKY"][n];
+        fields = ["xdop", "ydop", "hdop", "vdop", "pdop", "tdop", "gdop", "nSat", "uSat"];
+        for(i=0; i<fields.length; i++) {
+          fieldname = fields[i]
+          if (gpsInfo["SKY"][fieldname] === undefined) {
+            document.getElementById(fieldname).innerText = " --- ";
+          } else {
+            document.getElementById(fieldname).innerText = gpsInfo["SKY"][fieldname];
+          }
         }
 
         // nasty stuff to compute the table contents
         sky_table = document.getElementById("sky");
         table_content = "<tr> <td><b>GNSS</b></td> <td><b>PRN</b></td> <td><b>Azim</b></td> <td><b>Elev</b></td> <td><b>SNR</b></td> <td><b>Used</b></td> <td><b>Quality</b></td> </tr>"
-        for(i=0; i<gs["satellites"].length; i++){
-          s = gs["satellites"][i];
+        for(i=0; i<gps_sky["satellites"].length; i++){
+          s = gps_sky["satellites"][i];
           s['used'] = s['used']?"Y":"N";
           if (s['health'] != 1){
             s['used'] += 'x';
