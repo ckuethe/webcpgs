@@ -274,13 +274,19 @@ def index_html() -> str:
         var gpsInfo = JSON.parse(httpRequest.responseText);
         console.log(gpsInfo);
         if (gpsInfo["CON"]) {
-            cs = "Connected";
-            cc = "green";
-            emoji = "🛰️";
+            if (gpsInfo["DEV"] == "No GPS Device") {
+                cs = "Degraded - no device";
+                cc = "orange";
+                emoji = "⚠️️";
+            } else {
+                cs = "Connected";
+                cc = "green";
+                emoji = "🛰️";
+            }
         } else {
             cs = "Disconnected";
             cc = "red";
-            emoji = "⛔"; // ⚠️
+            emoji = "⛔";
         }
         document.getElementById("connected").innerHTML = `<center><strong><font size="+2"><font color="${cc}">GPSD ${cs}</font> ${emoji}</font></strong></center>`;
         document.getElementById("ts").innerText = gpsInfo["TS"];
@@ -328,16 +334,20 @@ def index_html() -> str:
         // nasty stuff to compute the table contents
         sky_table = document.getElementById("sky");
         table_content = "<tr> <td><b>GNSS</b></td> <td><b>PRN</b></td> <td><b>Azim</b></td> <td><b>Elev</b></td> <td><b>SNR</b></td> <td><b>Used</b></td> <td><b>Quality</b></td> </tr>"
-        for(i=0; i<gps_sky["satellites"].length; i++){
-          s = gps_sky["satellites"][i];
-          s['used'] = s['used']?"Y":"N";
-          if (s['health'] != 1){
-            s['used'] += 'x';
+        if (gps_sky["satellites"] === undefined) {
+          1 == 1 ; // do nothing
+        } else {
+          for(i=0; i<gps_sky["satellites"].length; i++){
+            s = gps_sky["satellites"][i];
+            s['used'] = s['used']?"Y":"N";
+            if (s['health'] != 1){
+                s['used'] += 'x';
+            }
+            q = qtype[s['qual']];
+            if (s['el'] === undefined){ s['el'] = -1; }
+            if (s['az'] === undefined){ s['az'] = -1; }
+            table_content += `<tr> <td>${gnss[s['gnssid']]} ${s['svid']}</td> <td>${s['PRN']}</td> <td>${s['az']}</td> <td>${s['el']}</td> <td>${s['ss']}</td> <td>${s['used']}</td> <td>${q} </td> </tr>`;
           }
-          q = qtype[s['qual']];
-          if (s['el'] === undefined){ s['el'] = -1; }
-          if (s['az'] === undefined){ s['az'] = -1; }
-          table_content += `<tr> <td>${gnss[s['gnssid']]} ${s['svid']}</td> <td>${s['PRN']}</td> <td>${s['az']}</td> <td>${s['el']}</td> <td>${s['ss']}</td> <td>${s['used']}</td> <td>${q} </td> </tr>`;
         }
         sky_table.innerHTML = table_content;
       }
