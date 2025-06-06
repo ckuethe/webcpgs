@@ -90,63 +90,63 @@ def gps_thread() -> None:
         try:
             with socket.create_connection((ARGS.gpsd["host"], ARGS.gpsd["port"]), ARGS.timeout) as gpssock:
                 gpssock.setblocking(False)
-                gpsfd = gpssock.makefile("rw")
-                watch_args: dict[str, bool] = {"enable": True, "json": True}
-                if ARGS.gpsd["dev"]:
-                    NAV["DEV"] = watch_args["device"] = ARGS.gpsd["dev"]
-                else:
-                    NAV["DEV"] = "any"
-                watch: str = "?WATCH=" + jdumps(watch_args)
-                print(watch, file=gpsfd, flush=True)
-                connected = True
-                last_data_time = 0.0
-                while connected:
-                    line: str = gpsfd.readline().strip()
-                    if "No such device" in line:
-                        NAV["CON"] = False
-                        NAV["DEV"] = "No GPS Device"
+                with gpssock.makefile("rw") as gpsfd:
+                    watch_args: dict[str, bool] = {"enable": True, "json": True}
+                    if ARGS.gpsd["dev"]:
+                        NAV["DEV"] = watch_args["device"] = ARGS.gpsd["dev"]
+                    else:
+                        NAV["DEV"] = "any"
+                    watch: str = "?WATCH=" + jdumps(watch_args)
+                    print(watch, file=gpsfd, flush=True)
+                    connected = True
+                    last_data_time = 0.0
+                    while connected:
+                        line: str = gpsfd.readline().strip()
+                        if "No such device" in line:
+                            NAV["CON"] = False
+                            NAV["DEV"] = "No GPS Device"
 
-                    monotime: float = monotonic()
-                    if not line:
-                        if last_data_time and (monotime - last_data_time > ARGS.timeout):
-                            connected = False
-                            raise TimeoutError("No data")
-                        sleep(0.2)
-                        continue
-                    if NAV["CON"] is False:
-                        logging.info("connected to gpsd")
-                        NAV["CON"] = True
-                    message: dict[str, Any] = jloads(line)
-                    last_data_time = monotime
-                    message_type: str = message["class"]
-
-                    # Only care about these two message types
-                    if message_type not in ["TPV", "SKY"]:
-                        continue
-
-                    # Skip old data
-                    fix_timestamp: Any = message.get("time", "")
-                    if fix_timestamp:
-                        NAV["TS"] = fix_timestamp
-                    if message_type == "TPV":
-                        if fix_timestamp != NAV["TIME"]:
-                            NAV["TIME"] = fix_timestamp
-                        try:
-                            # this won't exist if there is no valid fix
-                            message["cep"] = message.pop("eph")
-                            message["climb_fpm"] = round(message["climb"] * 196.85, 1)
-                        except KeyError:
-                            pass
-                    if message_type == "SKY":
-                        if "satellites" in message:
-                            # Sort satellites in decreasing order of quality
-                            message["satellites"].sort(
-                                key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True
-                            )
-                        else:
+                        monotime: float = monotonic()
+                        if not line:
+                            if last_data_time and (monotime - last_data_time > ARGS.timeout):
+                                connected = False
+                                raise TimeoutError("No data")
+                            sleep(0.2)
                             continue
-                    message.pop("class", None)
-                    NAV[message_type].update(message)
+                        if NAV["CON"] is False:
+                            logging.info("connected to gpsd")
+                            NAV["CON"] = True
+                        message: dict[str, Any] = jloads(line)
+                        last_data_time = monotime
+                        message_type: str = message["class"]
+
+                        # Only care about these two message types
+                        if message_type not in ["TPV", "SKY"]:
+                            continue
+
+                        # Skip old data
+                        fix_timestamp: Any = message.get("time", "")
+                        if fix_timestamp:
+                            NAV["TS"] = fix_timestamp
+                        if message_type == "TPV":
+                            if fix_timestamp != NAV["TIME"]:
+                                NAV["TIME"] = fix_timestamp
+                            try:
+                                # this won't exist if there is no valid fix
+                                message["cep"] = message.pop("eph")
+                                message["climb_fpm"] = round(message["climb"] * 196.85, 1)
+                            except KeyError:
+                                pass
+                        if message_type == "SKY":
+                            if "satellites" in message:
+                                # Sort satellites in decreasing order of quality
+                                message["satellites"].sort(
+                                    key=lambda s: s.get("qual", 0) * 100 + s.get("ss", 0), reverse=True
+                                )
+                            else:
+                                continue
+                        message.pop("class", None)
+                        NAV[message_type].update(message)
         except KeyboardInterrupt:
             APP_RUN = False
             return
