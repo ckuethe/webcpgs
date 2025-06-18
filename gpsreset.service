@@ -1,0 +1,19 @@
+[Unit]
+Description=Web Interface to gpsd
+Documentation=https://github.com/ckuethe/webcgps/
+Documentation=https://gpsd.io/
+
+[Service]
+Type=simple
+# You will, of course, need to provide a full path to gpsreset.sh
+#ExecStart=/opt/gpsd/bin/gpsreset.sh monitor
+ExecStart=/path/to/gpsreset.sh monitor
+
+# Insist on restarting, but don't be rude about it
+Restart=always
+RestartSec=2
+StartLimitBurst=3
+StartLimitInterval=20
+
+[Install]
+WantedBy=multi-user.target
