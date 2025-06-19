@@ -22,4 +22,6 @@ options:
 ![Web GPS vs curses cgps](webcgps_vs_cgps.jpg?raw=true "WebGPS comparison")
 
 There's also a helper script - [gpsreset.sh](gpsreset.sh) that can effectively
-unplug and replug your gps if it somehow gets horribly confused.
+unplug and replug your gps if it somehow gets horribly confused. Using the included
+[gpsreset.service](gpsreset.service) systemd service you can just automate that
+process. Terrible, terrible kludge, but it's better than data loss.
