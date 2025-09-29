@@ -5,6 +5,7 @@
 Web version of cgps, so I can point a web browser at some IOT device running
 gpsd and see what it's doing. Fear my early 90's web1.0 html table skills.
 """
+
 import logging
 import os
 import re
@@ -232,8 +233,9 @@ def index_html() -> str:
 <tr><td colspan="3" id="connected"></td></tr>
 <tr><td><b>Message Time</b></td><td colspan="2"> <output id="ts"></output></td></tr>
 <tr><td><b>Time</b></td><td colspan="2"> <output id="time"></output> (<output id="leapseconds"></output>)</td></tr>
-<tr><td><b>Latitude</b></td><td colspan=2><output id="lat"></output></td></tr>
-<tr><td><b>Longitude</b></td><td colspan=2><output id="lon"></output></td></tr>
+<tr><td><b>Latitude</b></td><td><output id="lat"></output></td>
+    <td rowspan=2 align=center valign=center>🗺<a href="" id="maplink" target="_blank"><b>️Map It!</b></a>🌎</td></tr>
+<tr><td><b>Longitude</b></td><td><output id="lon"></output></td></tr>
 <tr><td><b>Altitude</b></td><td><output id="altHAE"></output>m HAE</td><td><output id="altMSL"></output>m MSL</td></tr>
 <tr><td><b>Speed</b></td><td colspan=2><output id="speed"></output>m/s</td></tr>
 <tr><td><b>Track</b></td> <td><output id="track"></output></td>  <td><output id="magvar"></output></td> </tr>
@@ -306,6 +308,9 @@ def index_html() -> str:
             document.getElementById(fieldname).innerText = gps_tpv[fieldname];
           }
         }
+
+        document.getElementById("maplink").href = "https://www.openstreetmap.org/#map=11/" + gps_tpv["lat"] + "/" + gps_tpv["lon"]
+
         // ECEF state vector
         axis = ["x", "y", "z"];
         vz = ["", "v"];
