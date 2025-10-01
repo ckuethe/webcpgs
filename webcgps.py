@@ -7,7 +7,6 @@ gpsd and see what it's doing. Fear my early 90's web1.0 html table skills.
 """
 
 import logging
-import os
 import re
 import socket
 from argparse import ArgumentParser, Namespace
@@ -309,7 +308,18 @@ def index_html() -> str:
           }
         }
 
-        document.getElementById("maplink").href = "https://www.openstreetmap.org/#map=11/" + gps_tpv["lat"] + "/" + gps_tpv["lon"]
+        // Decimal places vs approximate linear distance
+        // 0:100km, 1:10km, 2:1km, 3:100m, 4:10m, 5:1m
+        z = 0.5;
+        c_x = parseFloat(gps_tpv["lon"]);
+        c_y = parseFloat(gps_tpv["lat"]);
+        a_x = (c_x-2*z).toFixed(1);
+        a_y = (c_y-z).toFixed(1);
+        b_x = (c_x+2*z).toFixed(1);
+        b_y = (c_y+z).toFixed(1);
+        c_x = c_x.toFixed(2);
+        c_y = c_y.toFixed(2);
+        document.getElementById("maplink").href = `https://www.openstreetmap.org/export/embed.html?layer=mapnik&marker=${c_y},${c_x}&bbox=${a_x},${a_y},${b_x},${b_y}` ;
 
         // ECEF state vector
         axis = ["x", "y", "z"];
