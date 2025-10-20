@@ -317,8 +317,8 @@ def index_html() -> str:
         a_y = (c_y-z).toFixed(1);
         b_x = (c_x+2*z).toFixed(1);
         b_y = (c_y+z).toFixed(1);
-        c_x = c_x.toFixed(2);
-        c_y = c_y.toFixed(2);
+        c_x = c_x.toFixed(3);
+        c_y = c_y.toFixed(3);
         document.getElementById("maplink").href = `https://www.openstreetmap.org/export/embed.html?layer=mapnik&marker=${c_y},${c_x}&bbox=${a_x},${a_y},${b_x},${b_y}` ;
 
         // ECEF state vector
